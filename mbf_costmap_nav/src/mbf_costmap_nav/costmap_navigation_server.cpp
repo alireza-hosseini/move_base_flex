@@ -71,6 +71,7 @@ CostmapNavigationServer::CostmapNavigationServer(const boost::shared_ptr<tf::Tra
   // even if shutdown_costmaps is a dynamically reconfigurable parameter, we
   // need it here to decide weather to start or not the costmaps on starting up
   private_nh_.param("shutdown_costmaps", shutdown_costmaps_, false);
+  private_nh_.param<double>("refine_plan_obstacle_cost_threshold", refine_plan_obstacle_cost_thresh_, 20);
 
   // initialize costmaps (stopped if shutdown_costmaps is true)
   if (!shutdown_costmaps_)
@@ -299,7 +300,6 @@ bool CostmapNavigationServer::callServiceRefinePlan(mbf_msgs::RefinePlan::Reques
     response.success = false;
     return true;
   }
-  unsigned char obstacle_cost_threshold = 20;
   std::vector<geometry_msgs::PoseStamped> plan = request.plan.poses;
   std::vector<geometry_msgs::PoseStamped> refined_plan;
   size_t before_obstacle;
@@ -326,7 +326,7 @@ bool CostmapNavigationServer::callServiceRefinePlan(mbf_msgs::RefinePlan::Reques
     if (!in_obstacle)
     {
       cost = global_costmap_model_ptr_->lineCost(last_mx, mx, last_my, my);
-      if (cost < 0 || cost > obstacle_cost_threshold)
+      if (cost < 0 || cost > refine_plan_obstacle_cost_thresh_)
       {
         before_obstacle = i - 1;
         in_obstacle = true;
@@ -334,7 +334,7 @@ bool CostmapNavigationServer::callServiceRefinePlan(mbf_msgs::RefinePlan::Reques
     }
     cost = global_costmap_model_ptr_->pointCost(mx, my);
 
-    if (cost < 0 || cost > obstacle_cost_threshold)
+    if (cost < 0 || cost > refine_plan_obstacle_cost_thresh_)
     {
       if (!in_obstacle)
       {

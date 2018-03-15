@@ -205,6 +205,8 @@ private:
 
   //! Stop updating costmaps when not planning or controlling, if true
   bool shutdown_costmaps_;
+  //! This cost threshold will be used in refine plan service callback While looking for obstacles
+  double refine_plan_obstacle_cost_thresh_;
   ros::Timer shutdown_costmaps_timer_;    //!< delayed shutdown timer
   ros::Duration shutdown_costmaps_delay_; //!< delayed shutdown delay
 
