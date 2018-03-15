@@ -47,6 +47,7 @@
 #include <actionlib/client/simple_action_client.h>
 
 #include "mbf_costmap_nav/costmap_navigation_server.h"
+#include "mbf_abstract_nav/abstract_planner_execution.h"
 
 namespace mbf_costmap_nav
 {
@@ -64,11 +65,13 @@ CostmapNavigationServer::CostmapNavigationServer(const boost::shared_ptr<tf::Tra
                                                              global_costmap_ptr_,
                                                              local_costmap_ptr_))),
     global_costmap_ptr_(new costmap_2d::Costmap2DROS("global_costmap", *tf_listener_ptr_)),
-    local_costmap_ptr_(new costmap_2d::Costmap2DROS("local_costmap", *tf_listener_ptr_))
+    local_costmap_ptr_(new costmap_2d::Costmap2DROS("local_costmap", *tf_listener_ptr_)),
+    global_costmap_model_ptr_(new base_local_planner::CostmapModel(*global_costmap_ptr_->getCostmap()))
 {
   // even if shutdown_costmaps is a dynamically reconfigurable parameter, we
   // need it here to decide weather to start or not the costmaps on starting up
   private_nh_.param("shutdown_costmaps", shutdown_costmaps_, false);
+  private_nh_.param<double>("refine_plan_obstacle_cost_threshold", refine_plan_obstacle_cost_thresh_, 20);
 
   // initialize costmaps (stopped if shutdown_costmaps is true)
   if (!shutdown_costmaps_)
@@ -93,6 +96,8 @@ CostmapNavigationServer::CostmapNavigationServer(const boost::shared_ptr<tf::Tra
   // advertise services and current goal topic
   check_pose_cost_srv_ = private_nh_.advertiseService("check_pose_cost",
                                                       &CostmapNavigationServer::callServiceCheckPoseCost, this);
+  refine_plan_srv_ = private_nh_.advertiseService("refine_plan",
+                                                  &CostmapNavigationServer::callServiceRefinePlan, this);
   clear_costmaps_srv_ = private_nh_.advertiseService("clear_costmaps",
                                                      &CostmapNavigationServer::callServiceClearCostmaps, this);
 
@@ -281,6 +286,141 @@ bool CostmapNavigationServer::callServiceCheckPoseCost(mbf_msgs::CheckPose::Requ
   }
 
   checkDeactivateCostmaps();
+
+  return true;
+}
+
+bool CostmapNavigationServer::callServiceRefinePlan(mbf_msgs::RefinePlan::Request &request,
+                                                    mbf_msgs::RefinePlan::Response &response)
+{
+  ROS_INFO("Trying to refine plan...");
+  if(request.plan.poses.empty())
+  {
+    ROS_ERROR("Given plan to refine is empty!");
+    response.success = false;
+    return true;
+  }
+  std::vector<geometry_msgs::PoseStamped> plan = request.plan.poses;
+  std::vector<geometry_msgs::PoseStamped> refined_plan;
+  size_t before_obstacle;
+  bool in_obstacle = false;
+  unsigned int last_mx, last_my;
+
+
+  refined_plan.reserve(plan.size());
+  refined_plan.push_back(plan.front());
+
+  global_costmap_ptr_->getCostmap()->worldToMap(plan[0].pose.position.x,
+                                                plan[0].pose.position.y,
+                                                last_mx, last_my);
+
+
+  // For now just assume that the first pose is free. TODO
+  for (size_t i = 1; i < plan.size(); ++i)
+  {
+    geometry_msgs::Point pos = plan[i].pose.position;
+    unsigned int mx, my;
+    global_costmap_ptr_->getCostmap()->worldToMap(pos.x, pos.y, mx, my);
+
+    double cost;
+    if (!in_obstacle)
+    {
+      cost = global_costmap_model_ptr_->lineCost(last_mx, mx, last_my, my);
+      if (cost < 0 || cost > refine_plan_obstacle_cost_thresh_)
+      {
+        before_obstacle = i - 1;
+        in_obstacle = true;
+      }
+    }
+    cost = global_costmap_model_ptr_->pointCost(mx, my);
+
+    if (cost < 0 || cost > refine_plan_obstacle_cost_thresh_)
+    {
+      if (!in_obstacle)
+      {
+        before_obstacle = i - 1;
+        in_obstacle = true;
+      }
+    }
+    else if (in_obstacle)
+    {
+      in_obstacle = false;
+      // Find a plan from before_obstacle to i and insert into path
+      std::vector<geometry_msgs::PoseStamped> plan_around_obstacle;
+
+      active_planning_ = true;
+      planning_ptr_->startPlanning(plan[before_obstacle], plan[i], request.tolerance);
+      while(ros::ok() && active_planning_)
+      {
+        CostmapPlannerExecution::PlanningState state = planning_ptr_->getState();
+        if(state == CostmapPlannerExecution::FOUND_PLAN)
+        {
+          ROS_DEBUG("Plan around obstacle found");
+          plan_around_obstacle = planning_ptr_->getPlan();
+          active_planning_ = false;
+        }
+        else if(state == CostmapPlannerExecution::PLANNING)
+        {
+          if (planning_ptr_->isPatienceExceeded())
+          {
+            ROS_INFO_STREAM_NAMED("refine_plan", "Global planner patience has been exceeded! Cancel planning...");
+            if (!planning_ptr_->cancel())
+            {
+              ROS_WARN_STREAM_THROTTLE_NAMED(2.0, "refine_plan", "Cancel planning failed or is not supported; "
+                "must wait until current plan finish!");
+            }
+          }
+          else
+          {
+            ROS_DEBUG_THROTTLE_NAMED(2.0, "refine_plan", "robot navigation state: planning");
+          }
+        }
+        else if(state == CostmapPlannerExecution::NO_PLAN_FOUND ||
+          state == CostmapPlannerExecution::STOPPED ||
+          state == CostmapPlannerExecution::INTERNAL_ERROR ||
+          state == CostmapPlannerExecution::MAX_RETRIES ||
+          state == CostmapPlannerExecution::CANCELED)
+        {
+          ROS_ERROR("Failed to find path around obstacle that is blocking the plan");
+          active_planning_ = false;
+          response.success = false;
+          return false;
+        }
+      }
+      if (plan_around_obstacle.size() < 2)
+      {
+        ROS_ERROR("Failed to find path around obstacle that is blocking the plan");
+        response.success = false;
+        return false;
+      }
+      ROS_INFO("Obstacle on path. Plan around with %zu poses",
+               plan_around_obstacle.size());
+
+      // Insert plan around obstacle into refined plan. The first pose is
+      // omitted as it should already be in refined_plan.
+      refined_plan.insert(refined_plan.end(), plan_around_obstacle.begin() + 1,
+                          plan_around_obstacle.end());
+    }
+    else
+    {
+      refined_plan.push_back(plan[i]);
+    }
+
+    last_mx = mx;
+    last_my = my;
+  }
+
+  if (in_obstacle)
+  {
+    ROS_WARN("End of plan is in obstacle. Move as far as possible.");
+  }
+
+  response.refined_plan.poses = refined_plan;
+  response.refined_plan.header.frame_id = request.plan.header.frame_id;
+  response.refined_plan.header.stamp = ros::Time::now();
+  response.success = true;
+
+  ROS_INFO("Refinement done. Plan has %zu poses.", response.refined_plan.poses.size());
 
   return true;
 }
