@@ -400,7 +400,8 @@ bool CostmapNavigationServer::callServiceRefinePlan(mbf_msgs::RefinePlan::Reques
       // omitted as it should already be in refined_plan.
       refined_plan.insert(refined_plan.end(), plan_around_obstacle.begin() + 1,
                           plan_around_obstacle.end());
-    } else
+    }
+    else
     {
       refined_plan.push_back(plan[i]);
     }
@@ -415,7 +416,7 @@ bool CostmapNavigationServer::callServiceRefinePlan(mbf_msgs::RefinePlan::Reques
   }
 
   response.refined_plan.poses = refined_plan;
-  response.refined_plan.header.frame_id = "/map";
+  response.refined_plan.header.frame_id = request.plan.header.frame_id;
   response.refined_plan.header.stamp = ros::Time::now();
   response.success = true;
 
