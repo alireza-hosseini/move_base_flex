@@ -1,6 +1,6 @@
 <package>
     <name>mbf_msgs</name>
-    <version>0.1.0</version>
+    <version>0.1.1</version>
     <description>
         The move_base_flex messages package: For the package move_base_flex
 	    See <a href="http://wiki.ros.org/move_base_flex">move_base_flex</a>.
