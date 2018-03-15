@@ -50,6 +50,8 @@
 #include <mbf_costmap_nav/MoveBaseFlexConfig.h>
 #include <std_srvs/Empty.h>
 #include <mbf_msgs/CheckPose.h>
+#include <mbf_msgs/RefinePlan.h>
+#include <base_local_planner/costmap_model.h>
 
 namespace mbf_costmap_nav
 {
@@ -74,6 +76,7 @@ class CostmapNavigationServer : public mbf_abstract_nav::AbstractNavigationServe
 public:
 
   typedef boost::shared_ptr<costmap_2d::Costmap2DROS> CostmapPtr;
+  typedef boost::shared_ptr<base_local_planner::CostmapModel> CostmapModelPtr;
 
   /**
    * @brief Constructor
@@ -111,6 +114,19 @@ private:
    */
   bool callServiceCheckPoseCost(mbf_msgs::CheckPose::Request &request,
                                 mbf_msgs::CheckPose::Response &response);
+
+  /**
+   * @brief Callback method for the refine_plan service
+   *
+   * Refines the plan considering possible obstacles on the path, so if there is any obstacle, it will try to
+   * plan around the obstacle using default global planner
+   *
+   * @param request  Request object, see the mbf_msgs/RefinePlan service definition file
+   * @param response Response object, see the mbf_msgs/RefinePlan service definition file
+   * @return true, if the service completed successfully, false otherwise
+   */
+  bool callServiceRefinePlan(mbf_msgs::RefinePlan::Request &request,
+                             mbf_msgs::RefinePlan::Response &response);
 
   /**
    * @brief Callback method for the make_plan service
@@ -169,6 +185,9 @@ private:
   //! Shared pointer to the common global costmap
   CostmapPtr global_costmap_ptr_;
 
+  //! Shared pointer to the costmap model of global costmap
+  CostmapModelPtr global_costmap_model_ptr_;
+
   //! true, if the local costmap is active
   bool local_costmap_active_;
 
@@ -177,6 +196,9 @@ private:
 
   //! Service Server for the check_pose_cost service
   ros::ServiceServer check_pose_cost_srv_;
+
+  //! Service Server to refine the given plan
+  ros::ServiceServer refine_plan_srv_;
 
   //! Service Server for the clear_costmap service
   ros::ServiceServer clear_costmaps_srv_;
