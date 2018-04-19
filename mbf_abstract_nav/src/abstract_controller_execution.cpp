@@ -449,7 +449,7 @@ namespace mbf_abstract_nav
           }
           else
           {
-            ROS_WARN_THROTTLE(1.0, "Calculation needs to much time to stay in the moving frequency!");
+            ROS_WARN_THROTTLE(1.0, "Calculation needs too much time to stay in the moving frequency!");
           }
         }
       }
@@ -465,7 +465,8 @@ namespace mbf_abstract_nav
       moving_ = false;
     }
     catch (...){
-      ROS_FATAL_STREAM("Unknown error occurred: " << boost::current_exception_diagnostic_information());
+      message_ = "Unknown error occurred: " + boost::current_exception_diagnostic_information();
+      ROS_FATAL_STREAM(message_);
       setState(INTERNAL_ERROR);
     }
   }
