@@ -61,6 +61,7 @@ namespace mbf_abstract_nav
     private_nh.param("dist_tolerance", dist_tolerance_, 0.1);
     private_nh.param("angle_tolerance", angle_tolerance_, M_PI / 18.0);
     private_nh.param("tf_timeout", tf_timeout_, 1.0);
+    private_nh.param("stop_on_goal_reached", stop_on_goal_reached_, true);
 
     // init cmd_vel publisher for the robot velocity t
     vel_pub_ = nh.advertise<geometry_msgs::Twist>("cmd_vel", 1);
@@ -407,7 +408,16 @@ namespace mbf_abstract_nav
             cmd_vel_stamped.header.seq = seq++;
             setVelocityCmd(cmd_vel_stamped);
             setState(GOT_LOCAL_CMD);
-            vel_pub_.publish(cmd_vel_stamped.twist);
+            //Don't send the zero velocity commands if the goal is reached,
+            //This prevents the robot from stopping between executing the
+            //a set of plans.
+            if(cmd_vel_stamped.twist.linear.x != 0.0 ||
+              cmd_vel_stamped.twist.angular.z != 0.0 ||
+              !controller_->isGoalReached(dist_tolerance_, angle_tolerance_) ||
+              stop_on_goal_reached_)
+            {
+              vel_pub_.publish(cmd_vel_stamped.twist);
+            }
             condition_.notify_all();
             retries = 0;
           }

@@ -359,6 +359,10 @@ namespace mbf_abstract_nav
     //! time before a timeout used for tf requests
     double tf_timeout_;
 
+    /*! Setting this flag to false, will prevent the robot from stopping when
+    /* it reaches the goal */
+    bool stop_on_goal_reached_;
+
     //! dynamic reconfigure config mutex, thread safe param reading and writing
     boost::recursive_mutex configuration_mutex_;
 
