@@ -8,5 +8,9 @@ float32 tolerance
 #Refined plan
 nav_msgs/Path refined_plan
 
+geometry_msgs/PoseStamped pose_before_obstacle
+geometry_msgs/PoseStamped pose_after_obstacle
+geometry_msgs/PoseArray obstacles_boundary
+
 #True if refining the given plan was possible, otherwise False
 bool success
