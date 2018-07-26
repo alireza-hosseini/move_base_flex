@@ -401,6 +401,8 @@ bool CostmapNavigationServer::callServiceRefinePlan(mbf_msgs::RefinePlan::Reques
       // omitted as it should already be in refined_plan.
       refined_plan.insert(refined_plan.end(), plan_around_obstacle.begin() + 1,
                           plan_around_obstacle.end());
+      response.obstacles_boundary.poses.push_back(plan[before_obstacle].pose);
+      response.obstacles_boundary.poses.push_back(plan[i].pose);
     }
     else
     {
