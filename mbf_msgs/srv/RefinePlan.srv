@@ -8,8 +8,10 @@ float32 tolerance
 #Refined plan
 nav_msgs/Path refined_plan
 
-geometry_msgs/PoseStamped pose_before_obstacle
-geometry_msgs/PoseStamped pose_after_obstacle
+# Every two consecutive poses are referring to the 
+# last free pose before an obstacle and the first free pose after it,
+# For example if there were 3 obstacles along the original plan,
+# this array will contain 6 poses
 geometry_msgs/PoseArray obstacles_boundary
 
 #True if refining the given plan was possible, otherwise False
