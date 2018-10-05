@@ -367,8 +367,9 @@ bool CostmapNavigationServer::callServiceRefinePlan(mbf_msgs::RefinePlan::Reques
             ROS_INFO_STREAM_NAMED("refine_plan", "Global planner patience has been exceeded! Cancel planning...");
             if (!planning_ptr_->cancel())
             {
-              ROS_WARN_STREAM_THROTTLE_NAMED(2.0, "refine_plan", "Cancel planning failed or is not supported; "
-                "must wait until current plan finish!");
+              ROS_WARN_STREAM_NAMED(2.0, "refine_plan", "Cancel planning failed or is not supported; "
+                "forcing planning thread to stop!");
+              planning_ptr_->stopPlanning();
             }
           }
           else
